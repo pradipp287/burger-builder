@@ -7,6 +7,7 @@ import Input from "../../../components/UI/Input/Input";
 import withErrorHandler from '../../../hoc/withErrorHandler/withErrorHandler';
 import { connect } from "react-redux";
 import * as actions from '../../../store/action/index';
+import paymentAxios from 'axios';
 
 class ContactData extends Component {
   state = {
@@ -107,8 +108,69 @@ class ContactData extends Component {
       order: formData,
       userId : this.props.userId
     };
-   
-    this.props.onOrderBurger(order , this.props.token);
+      
+    paymentAxios.post('http://localhost:4000/orders',{
+      amount: +this.props.price * 100, // amount in the smallest currency unit
+      currency: "INR",
+       receipt: "order_rcptid_Pradip_24",
+    }).then(res => {
+      //alert(JSON.stringify(res.data))
+    const that = this;
+      var options = {
+        "key": "rzp_test_VojxnZSnxaplrV", // Enter the Key ID generated from the Dashboard
+        "amount": `${+this.props.price * 100}`, // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
+        "currency": "INR",
+        "name": "Burger Corp",
+        "description": "Test Transaction",
+        "image": "/burger-logo.png",
+        "order_id":res.data.id, //This is a sample Order ID. Pass the `id` obtained in the response of Step 1
+        "handler": function (response){
+            // alert(response.razorpay_payment_id);
+            // alert(response.razorpay_order_id);
+            // alert(response.razorpay_signature)
+            const responseData = {
+              paymentId : response.razorpay_payment_id,
+              order_id : response.razorpay_order_id,
+              razorSignature : response.razorpay_signature
+            };
+            paymentAxios.post('http://localhost:4000/verifySignature',responseData)
+                .then(response => {
+                  if(response.data.success){
+                    alert(`Amount Paid Successfully`);
+                     const updatedOrder = {...order, ...responseData};
+                    that.props.onOrderBurger(updatedOrder , that.props.token);
+                  } else{
+                    alert(`Error occured during payment`);
+                  }
+                })
+        },
+        "prefill": {
+            "name": "Pradip Patil",
+            "email": "pradip.patil@example.com",
+            "contact": "9999999999"
+        },
+        "notes": {
+            "address": "Razorpay Corporate Office"
+        },
+        "theme": {
+            "color": "#3399cc"
+        }
+    };
+     // eslint-disable-next-line no-undef
+  var rzp1 = new Razorpay(options);
+  rzp1.on('payment.failed', function (response){
+          alert(response.error.code);
+          alert(response.error.description);
+          alert(response.error.source);
+          alert(response.error.step);
+          alert(response.error.reason);
+          alert(response.error.metadata.order_id);
+          alert(response.error.metadata.payment_id);
+   });
+   rzp1.open();
+    
+  })
+  // this.props.onOrderBurger(order , this.props.token);
     
     // axios                                  //06-03-2021 before redux
     //   .post("/orders.json  ", order)
@@ -178,7 +240,7 @@ class ContactData extends Component {
           />
         ))}
 
-        <Button btnType="Success" disabled={!this.state.formIsValid}>ORDER</Button>
+        <Button btnType="Success" disabled={!this.state.formIsValid}>PAY ₹{this.props.price}</Button>
       </form>
     );
     if (this.props.loading) {
